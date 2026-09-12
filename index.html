@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Surface — Adaptive Ad Layout Engine</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#EFF1F4;
+    --panel:#FFFFFF;
+    --ink:#171A1F;
+    --muted:#6B7178;
+    --line:#DDE1E6;
+    --accent:#3654FF;
+    --accent-soft:#E8EBFF;
+    --flare:#FF5A36;
+    --sans:'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    --display:'Space Grotesk', sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);}
+  #app{display:grid;grid-template-columns:320px 1fr;min-height:100vh;}
+
+  aside{background:var(--panel);border-right:1px solid var(--line);padding:24px;position:sticky;top:0;height:100vh;overflow-y:auto;}
+  aside h1{font-family:var(--display);font-weight:700;font-size:19px;margin:0 0 4px;}
+  aside .tag{font-size:12px;color:var(--muted);margin-bottom:26px;display:block;}
+  label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin:16px 0 6px;}
+  label:first-of-type{margin-top:0;}
+  input[type=text], textarea{
+    width:100%;border:1px solid var(--line);border-radius:8px;padding:9px 11px;
+    font-family:var(--sans);font-size:13px;color:var(--ink);background:#FBFBFC;
+  }
+  textarea{resize:vertical;min-height:52px;}
+  input[type=color]{width:44px;height:32px;border:1px solid var(--line);border-radius:6px;padding:2px;background:#FBFBFC;}
+  .color-row{display:flex;align-items:center;gap:10px;}
+  .color-row span{font-size:12px;color:var(--muted);}
+  .note{margin-top:24px;padding:12px 14px;background:var(--accent-soft);border-radius:8px;font-size:12px;line-height:1.5;color:#2B3A9E;}
+
+  main{padding:28px 32px;}
+  main > header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:20px;}
+  main > header h2{font-family:var(--display);font-size:16px;margin:0;}
+  main > header span{font-size:12px;color:var(--muted);}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:22px;}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:10px;}
+  .card-head{display:flex;justify-content:space-between;align-items:baseline;}
+  .card-head b{font-size:13px;}
+  .card-head span{font-family:var(--sans);font-size:11px;color:var(--muted);}
+  .canvas-wrap{display:flex;align-items:center;justify-content:center;background:#F4F5F7;border-radius:6px;overflow:hidden;min-height:100px;}
+  canvas{display:block;max-width:100%;height:auto;}
+  .card-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;}
+  .status-stack{min-width:0;}
+  .dropped{font-size:10.5px;color:var(--flare);}
+  .dropped.none{color:var(--muted);}
+  .constraint{
+    font-size:10.5px;color:var(--flare);margin-top:2px;line-height:1.35;
+  }
+  .constraint.ok{color:#4B5563;}
+  .theme-status{
+    font-size:10.5px;color:var(--muted);margin-top:2px;line-height:1.35;
+  }
+  .export{font-size:11px;background:var(--ink);color:#fff;border:none;border-radius:6px;padding:6px 10px;cursor:pointer;}
+  .export:hover{background:var(--accent);}
+  .custom-surface{margin-top:24px;padding-top:18px;border-top:1px solid var(--line);}
+  .custom-surface h3{font-family:var(--display);font-size:13px;margin:0 0 4px;}
+  .custom-surface .hint{display:block;font-size:11px;color:var(--muted);line-height:1.4;margin-bottom:12px;}
+  .surface-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .surface-row input{min-width:0;}
+  .add-surface{width:100%;margin-top:10px;border:none;border-radius:7px;padding:9px 11px;background:var(--ink);color:#fff;font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer;}
+  .add-surface:hover{background:var(--accent);}
+  .surface-error{min-height:15px;margin-top:7px;font-size:10.5px;color:var(--flare);}
+  .card-head-left{min-width:0;}
+  .card-head-left b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .card-head-left small{display:block;font-size:10px;color:var(--accent);margin-top:3px;text-transform:uppercase;letter-spacing:.04em;}
+  .remove-surface{flex:0 0 auto;margin-left:8px;border:0;background:transparent;color:var(--muted);font-size:18px;line-height:1;cursor:pointer;padding:0 2px;}
+  .remove-surface:hover{color:var(--flare);}
+</style>
+</head>
+<body>
+<div id="app">
+  <aside>
+    <h1>Surface</h1>
+    <span class="tag">Adaptive layout engine for multi-surface ad creative</span>
+
+    <label>Brand name</label>
+    <input type="text" id="brand" value="Northline">
+
+    <label>Headline</label>
+    <textarea id="headline">Your next favorite pair, 30% off today.</textarea>
+
+    <label>Subheadline</label>
+    <textarea id="subhead">Free shipping on every order, no code needed.</textarea>
+
+    <label>CTA button label</label>
+    <input type="text" id="cta" value="Shop the sale">
+
+    <label>Image URL</label>
+    <input type="text" id="imgurl" value="https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=800&q=60">
+
+    <label>Accent color</label>
+    <div class="color-row">
+      <input type="color" id="accentColor" value="#3654ff">
+      <span>Used for the CTA button on every surface</span>
+    </div>
+
+    <div class="note">
+      The engine classifies each surface by aspect ratio, then reflows content by priority.
+      On tight surfaces it drops the subheadline first, then the logo, before it would ever
+      let text overflow or overlap the artwork. Watch the "dropped" tag under each card.
+    </div>
+
+    <div class="custom-surface">
+      <h3>Add custom surface</h3>
+      <span class="hint">Enter any name and pixel dimensions. It uses the same classify → layout → priority-drop pipeline.</span>
+
+      <label>Surface name</label>
+      <input type="text" id="surfaceName" placeholder="e.g. Pinterest Pin">
+
+      <div class="surface-row">
+        <div>
+          <label>Width (px)</label>
+          <input type="text" id="surfaceWidth" inputmode="numeric" placeholder="1000">
+        </div>
+        <div>
+          <label>Height (px)</label>
+          <input type="text" id="surfaceHeight" inputmode="numeric" placeholder="1500">
+        </div>
+      </div>
+
+      <button type="button" class="add-surface" id="addSurface">Add surface</button>
+      <div class="surface-error" id="surfaceError"></div>
+    </div>
+  </aside>
+
+  <main>
+    <header>
+      <h2>Live preview — surfaces</h2>
+      <span>Rendered natively per surface, not one design cropped 8 ways</span>
+    </header>
+    <div class="grid" id="grid"></div>
+  </main>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------- Surface catalogue ----------
+  const SURFACES = [
+    { name:'Instagram Story',      w:1080, h:1920 },
+    { name:'Mobile Interstitial',  w:320,  h:480  },
+    { name:'Instagram Feed',       w:1080, h:1080 },
+    { name:'Facebook Feed',        w:1200, h:628  },
+    { name:'YouTube Thumbnail',    w:1280, h:720  },
+    { name:'X / Twitter Post',     w:1600, h:900  },
+    { name:'Skyscraper',           w:160,  h:600  },
+    { name:'Leaderboard Banner',   w:728,  h:90   },
+  ];
+
+  // ---------- Classification ----------
+  function classify(w,h){
+    const r = w/h;
+    if(r <= 0.6) return 'tall';
+    if(r <= 0.85) return 'portrait';
+    if(r < 1.2) return 'square';
+    if(r < 2.2) return 'landscape';
+    return 'wide';
+  }
+
+  // ---------- Priority-based content dropping ----------
+  function decideContent(w,h){
+    const area = w*h;
+    const dropped = [];
+    let showSubhead = true, showLogo = true, showImage = true;
+    if(area < 150000) { showSubhead = false; dropped.push('subhead'); }
+    if(area < 80000)  { showLogo = false; dropped.push('logo'); showImage = false; dropped.push('image'); }
+    return { showSubhead, showLogo, showImage, dropped };
+  }
+
+  // ---------- Legibility constraints ----------
+  // These are actual output-canvas font sizes in pixels, not preview CSS sizes.
+  const LEGIBILITY = {
+    logo: 10,
+    headline: 14,
+    subhead: 11,
+    cta: 10
+  };
+
+  function getFontSizes(surface, boxes){
+    const W = surface.w, H = surface.h;
+    return {
+      logo: boxes.logo ? Math.max(10, boxes.logo.h*H*0.55) : null,
+      headline: boxes.headline ? Math.max(11, boxes.headline.h*H*0.32) : null,
+      subhead: boxes.subhead ? Math.max(9, boxes.subhead.h*H*0.4) : null,
+      cta: boxes.cta ? Math.max(9, boxes.cta.h*H*0.34) : null
+    };
+  }
+
+  function checkLegibility(surface){
+    const category = classify(surface.w, surface.h);
+    const decision = decideContent(surface.w, surface.h);
+    const boxes = getLayout(category, decision);
+    const sizes = getFontSizes(surface, boxes);
+    const violations = [];
+
+    Object.keys(LEGIBILITY).forEach(function(key){
+      if(sizes[key] !== null && sizes[key] < LEGIBILITY[key]){
+        violations.push(key + ' ' + Math.round(sizes[key]) + 'px');
+      }
+    });
+
+    return {violations, sizes};
+  }
+
+  // ---------- Text wrapping ----------
+  function wrapText(ctx, text, maxWidth){
+    const words = text.split(' ');
+    const lines = [];
+    let line = '';
+    for(const word of words){
+      const test = line ? line+' '+word : word;
+      if(ctx.measureText(test).width > maxWidth && line){
+        lines.push(line);
+        line = word;
+      } else {
+        line = test;
+      }
+    }
+    if(line) lines.push(line);
+    return lines;
+  }
+
+  function drawWrapped(ctx, text, x, y, maxWidth, lineHeight, maxLines){
+    const lines = wrapText(ctx, text, maxWidth).slice(0, maxLines);
+    lines.forEach((l,i)=> ctx.fillText(l, x, y + i*lineHeight));
+    return lines.length*lineHeight;
+  }
+
+  // ---------- Layout definitions per category (fractions of w/h) ----------
+  function getLayout(category, content){
+    const boxes = {};
+    const { showSubhead, showLogo, showImage } = content;
+
+    if(category === 'tall' || category === 'portrait'){
+      let y = 0;
+      if(showLogo){ boxes.logo = {x:0.06,y:0.03,w:0.6,h:0.06}; }
+      if(showImage){ boxes.image = {x:0,y:0.12,w:1,h:0.5}; }
+      boxes.headline = {x:0.07,y: showImage?0.66:0.30, w:0.86, h:0.15};
+      if(showSubhead) boxes.subhead = {x:0.07,y: showImage?0.80:0.46, w:0.86, h:0.10};
+      boxes.cta = {x:0.07, y:0.90, w:0.5, h:0.07};
+    }
+    else if(category === 'square'){
+      if(showImage) boxes.image = {x:0,y:0,w:1,h:0.58};
+      if(showLogo) boxes.logo = {x:0.06, y: showImage?0.62:0.06, w:0.5, h:0.05};
+      boxes.headline = {x:0.06, y: showImage?0.68:0.15, w:0.88, h:0.14};
+      if(showSubhead) boxes.subhead = {x:0.06, y: showImage?0.80:0.32, w:0.88, h:0.09};
+      boxes.cta = {x:0.06, y:0.89, w:0.42, h:0.08};
+    }
+    else if(category === 'landscape'){
+      if(showImage) boxes.imageFull = {x:0,y:0,w:1,h:1};
+      if(showLogo) boxes.logo = {x:0.04, y:0.06, w:0.3, h:0.08};
+      boxes.headline = {x:0.05, y:0.62, w:0.55, h:0.16};
+      if(showSubhead) boxes.subhead = {x:0.05, y:0.80, w:0.5, h:0.09};
+      boxes.cta = {x:0.72, y:0.80, w:0.24, h:0.11};
+    }
+    else { // wide (banner)
+      boxes.logo = {x:0.02, y:0.2, w:0.16, h:0.6};
+      boxes.headline = {x:0.20, y:0.15, w:0.55, h:0.7};
+      boxes.cta = {x:0.80, y:0.22, w:0.18, h:0.56};
+    }
+    return boxes;
+  }
+
+  // ---------- Image cache ----------
+  const imageCache = {};
+  function loadImage(url, onReady){
+    if(!url) return null;
+    if(imageCache[url] && imageCache[url].complete) return imageCache[url];
+    if(imageCache[url]) return null;
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = onReady;
+    img.onerror = onReady;
+    img.src = url;
+    imageCache[url] = img;
+    return null;
+  }
+
+  function drawCoverImage(ctx, img, x, y, w, h){
+    if(!img || !img.complete || !img.naturalWidth){
+      const grad = ctx.createLinearGradient(x,y,x+w,y+h);
+      grad.addColorStop(0,'#D8DCE4');
+      grad.addColorStop(1,'#BFC5D0');
+      ctx.fillStyle = grad;
+      ctx.fillRect(x,y,w,h);
+      return;
+    }
+    const ir = img.naturalWidth/img.naturalHeight;
+    const br = w/h;
+    let sx,sy,sw,sh;
+    if(ir > br){ sh = img.naturalHeight; sw = sh*br; sy=0; sx=(img.naturalWidth-sw)/2; }
+    else { sw = img.naturalWidth; sh = sw/br; sx=0; sy=(img.naturalHeight-sh)/2; }
+    ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
+  }
+
+  function roundRect(ctx,x,y,w,h,r){
+    ctx.beginPath();
+    ctx.moveTo(x+r,y);
+    ctx.arcTo(x+w,y,x+w,y+h,r);
+    ctx.arcTo(x+w,y+h,x,y+h,r);
+    ctx.arcTo(x,y+h,x,y,r);
+    ctx.arcTo(x,y,x+w,y,r);
+    ctx.closePath();
+  }
+
+  // ---------- Adaptive light/dark theme ----------
+  // Sample the loaded image on a small temporary canvas and calculate average luminance.
+  // Falls back to the light theme when the image is unavailable or cross-origin restricted.
+  function getImageBrightness(img){
+    if(!img || !img.complete || !img.naturalWidth) return null;
+
+    try{
+      const sample = document.createElement('canvas');
+      const size = 24;
+      sample.width = size;
+      sample.height = size;
+      const sctx = sample.getContext('2d', {willReadFrequently:true});
+      sctx.drawImage(img, 0, 0, size, size);
+
+      const data = sctx.getImageData(0, 0, size, size).data;
+      let luminance = 0;
+      let count = 0;
+
+      for(let i=0; i<data.length; i+=4){
+        const r = data[i] / 255;
+        const g = data[i+1] / 255;
+        const b = data[i+2] / 255;
+        // Relative luminance approximation.
+        luminance += 0.2126*r + 0.7152*g + 0.0722*b;
+        count++;
+      }
+
+      return count ? luminance/count : null;
+    }catch(err){
+      return null;
+    }
+  }
+
+  function getAdaptiveTheme(img, hasFullBleedImage){
+    if(!hasFullBleedImage) return {
+      mode:'light',
+      text:'#171A1F',
+      muted:'#6B7178',
+      overlay:'none'
+    };
+
+    const brightness = getImageBrightness(img);
+    if(brightness === null){
+      return {
+        mode:'dark',
+        text:'#FFFFFF',
+        muted:'rgba(255,255,255,0.82)',
+        overlay:'dark'
+      };
+    }
+
+    // Dark image -> light text. Bright image -> dark text with a subtle light overlay.
+    if(brightness < 0.48){
+      return {
+        mode:'dark',
+        text:'#FFFFFF',
+        muted:'rgba(255,255,255,0.82)',
+        overlay:'dark'
+      };
+    }
+
+    return {
+      mode:'light',
+      text:'#171A1F',
+      muted:'#4F5660',
+      overlay:'light'
+    };
+  }
+
+  // ---------- Core render ----------
+  function renderSurface(canvas, surface, content, scale){
+    const W = surface.w, H = surface.h;
+    canvas.width = W*scale; canvas.height = H*scale;
+    canvas.style.width = (W*scale/window.devicePixelRatio||1)+'px'; // handled via CSS max-width instead
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(scale,0,0,scale,0,0);
+
+    const category = classify(W,H);
+    const decision = decideContent(W,H);
+    const boxes = getLayout(category, decision);
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0,0,W,H);
+
+    const img = content.imgurl ? loadImage(content.imgurl, ()=> renderAll()) : null;
+
+    if(boxes.imageFull){
+      const b = boxes.imageFull;
+      drawCoverImage(ctx, img, b.x*W, b.y*H, b.w*W, b.h*H);
+    } else if(boxes.image){
+      const b = boxes.image;
+      drawCoverImage(ctx, img, b.x*W, b.y*H, b.w*W, b.h*H);
+    }
+
+    const onImage = !!boxes.imageFull;
+    const theme = getAdaptiveTheme(img, onImage);
+
+    // Add a readability overlay whose direction depends on the sampled image brightness.
+    if(onImage && theme.overlay !== 'none'){
+      if(theme.overlay === 'dark'){
+        const grad = ctx.createLinearGradient(0,H*0.35,0,H);
+        grad.addColorStop(0,'rgba(10,12,20,0)');
+        grad.addColorStop(1,'rgba(10,12,20,0.72)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0,0,W,H);
+      }else{
+        const grad = ctx.createLinearGradient(0,H*0.35,0,H);
+        grad.addColorStop(0,'rgba(255,255,255,0)');
+        grad.addColorStop(1,'rgba(255,255,255,0.68)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0,0,W,H);
+      }
+    }
+
+    const textColor = theme.text;
+    const mutedColor = theme.muted;
+
+    if(boxes.logo){
+      const b = boxes.logo;
+      ctx.fillStyle = textColor;
+      ctx.font = `600 ${Math.max(10,b.h*H*0.55)}px Inter, sans-serif`;
+      ctx.textBaseline = 'middle';
+      ctx.fillText(content.brand, b.x*W, (b.y+b.h/2)*H);
+    }
+
+    if(boxes.headline){
+      const b = boxes.headline;
+      ctx.fillStyle = textColor;
+      ctx.textBaseline = 'top';
+      const fontSize = Math.max(11, b.h*H*0.32);
+      ctx.font = `700 ${fontSize}px 'Space Grotesk', sans-serif`;
+      drawWrapped(ctx, content.headline, b.x*W, b.y*H, b.w*W, fontSize*1.15, category==='wide'?2:3);
+    }
+
+    if(boxes.subhead){
+      const b = boxes.subhead;
+      ctx.fillStyle = mutedColor;
+      ctx.textBaseline = 'top';
+      const fontSize = Math.max(9, b.h*H*0.4);
+      ctx.font = `400 ${fontSize}px Inter, sans-serif`;
+      drawWrapped(ctx, content.subhead, b.x*W, b.y*H, b.w*W, fontSize*1.3, 2);
+    }
+
+    if(boxes.cta){
+      const b = boxes.cta;
+      const bx=b.x*W, by=b.y*H, bw=b.w*W, bh=b.h*H;
+      ctx.fillStyle = content.accent;
+      roundRect(ctx, bx, by, bw, bh, Math.min(bh/2, 14));
+      ctx.fill();
+      ctx.fillStyle = '#FFFFFF';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const fontSize = Math.max(9, bh*0.34);
+      ctx.font = `600 ${fontSize}px Inter, sans-serif`;
+      ctx.fillText(content.cta, bx+bw/2, by+bh/2, bw*0.9);
+      ctx.textAlign = 'left';
+    }
+
+    return {
+      dropped: decision.dropped,
+      legibility: checkLegibility(surface),
+      theme: theme
+    };
+  }
+
+  // ---------- Wire up UI ----------
+  const grid = document.getElementById('grid');
+  const cards = [];
+
+  function renderOne(card){
+    const result = renderSurface(card.canvas, card.surface, getContent(), card.scale);
+
+    if(result.dropped.length){
+      card.droppedTag.textContent = 'dropped: '+result.dropped.join(', ');
+      card.droppedTag.classList.remove('none');
+    } else {
+      card.droppedTag.textContent = 'no drops';
+      card.droppedTag.classList.add('none');
+    }
+
+    if(result.legibility.violations.length){
+      card.constraintTag.textContent = '⚠ legibility: '+result.legibility.violations.join(', ');
+      card.constraintTag.classList.remove('ok');
+    } else {
+      card.constraintTag.textContent = '✓ legibility OK';
+      card.constraintTag.classList.add('ok');
+    }
+
+    card.themeTag.textContent = 'theme: '+result.theme.mode;
+  }
+
+  function addSurfaceCard(surface, removable){
+    const card = document.createElement('div');
+    card.className = 'card';
+
+    const head = document.createElement('div');
+    head.className = 'card-head';
+
+    const headLeft = document.createElement('div');
+    headLeft.className = 'card-head-left';
+
+    const name = document.createElement('b');
+    name.textContent = surface.name;
+
+    const category = document.createElement('small');
+    category.textContent = classify(surface.w, surface.h);
+
+    const dimensions = document.createElement('span');
+    dimensions.textContent = surface.w + '×' + surface.h;
+
+    headLeft.appendChild(name);
+    headLeft.appendChild(category);
+    head.appendChild(headLeft);
+    head.appendChild(dimensions);
+
+    if(removable){
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'remove-surface';
+      removeBtn.setAttribute('aria-label', 'Remove ' + surface.name);
+      removeBtn.title = 'Remove surface';
+      removeBtn.textContent = '×';
+      removeBtn.addEventListener('click', function(){
+        const index = cards.findIndex(function(c){ return c.card === card; });
+        if(index !== -1) cards.splice(index, 1);
+        card.remove();
+      });
+      head.appendChild(removeBtn);
+    }
+
+    const canvasWrap = document.createElement('div');
+    canvasWrap.className = 'canvas-wrap';
+
+    const canvas = document.createElement('canvas');
+    canvasWrap.appendChild(canvas);
+
+    const foot = document.createElement('div');
+    foot.className = 'card-foot';
+
+    const statusStack = document.createElement('div');
+    statusStack.className = 'status-stack';
+
+    const droppedTag = document.createElement('div');
+    droppedTag.className = 'dropped none';
+    droppedTag.textContent = 'no drops';
+
+    const constraintTag = document.createElement('div');
+    constraintTag.className = 'constraint ok';
+    constraintTag.textContent = '✓ legibility OK';
+
+    const themeTag = document.createElement('div');
+    themeTag.className = 'theme-status';
+    themeTag.textContent = 'theme: light';
+
+    statusStack.appendChild(droppedTag);
+    statusStack.appendChild(constraintTag);
+    statusStack.appendChild(themeTag);
+
+    const exportBtn = document.createElement('button');
+    exportBtn.type = 'button';
+    exportBtn.className = 'export';
+    exportBtn.textContent = 'Export PNG';
+
+    foot.appendChild(statusStack);
+    foot.appendChild(exportBtn);
+    card.appendChild(head);
+    card.appendChild(canvasWrap);
+    card.appendChild(foot);
+    grid.appendChild(card);
+
+    const maxDim = 260;
+    const scale = Math.min(maxDim/surface.w, maxDim/surface.h);
+    canvas.style.maxWidth = (surface.w*scale) + 'px';
+
+    const cardState = {
+      surface:surface,
+      canvas:canvas,
+      droppedTag:droppedTag,
+      constraintTag:constraintTag,
+      themeTag:themeTag,
+      scale:scale,
+      card:card
+    };
+    cards.push(cardState);
+
+    exportBtn.addEventListener('click', function(){
+      const full = document.createElement('canvas');
+      renderSurface(full, surface, getContent(), 1);
+      const link = document.createElement('a');
+      link.download = surface.name.replace(/\s+/g,'_') + '.png';
+      link.href = full.toDataURL('image/png');
+      link.click();
+    });
+
+    // New cards render immediately instead of waiting for the next content edit.
+    renderOne(cardState);
+  }
+
+  SURFACES.forEach(function(surface){ addSurfaceCard(surface, false); });
+
+  function getContent(){
+    return {
+      brand: document.getElementById('brand').value || 'Brand',
+      headline: document.getElementById('headline').value || '',
+      subhead: document.getElementById('subhead').value || '',
+      cta: document.getElementById('cta').value || 'Learn more',
+      imgurl: document.getElementById('imgurl').value.trim(),
+      accent: document.getElementById('accentColor').value
+    };
+  }
+
+  function renderAll(){
+    cards.forEach(renderOne);
+  }
+
+  ['brand','headline','subhead','cta','imgurl','accentColor'].forEach(id=>{
+    document.getElementById(id).addEventListener('input', renderAll);
+  });
+
+  document.getElementById('addSurface').addEventListener('click', function(){
+    const nameInput = document.getElementById('surfaceName');
+    const widthInput = document.getElementById('surfaceWidth');
+    const heightInput = document.getElementById('surfaceHeight');
+    const error = document.getElementById('surfaceError');
+
+    const name = nameInput.value.trim();
+    const w = Number.parseInt(widthInput.value, 10);
+    const h = Number.parseInt(heightInput.value, 10);
+
+    if(!name){
+      error.textContent = 'Enter a surface name.';
+      nameInput.focus();
+      return;
+    }
+    if(!Number.isInteger(w) || !Number.isInteger(h) || w <= 0 || h <= 0){
+      error.textContent = 'Width and height must be positive whole pixels.';
+      widthInput.focus();
+      return;
+    }
+
+    error.textContent = '';
+    addSurfaceCard({name:name, w:w, h:h}, true);
+    nameInput.value = '';
+    widthInput.value = '';
+    heightInput.value = '';
+    nameInput.focus();
+  });
+
+  renderAll();
+})();
+</script>
+</body>
+</html>
